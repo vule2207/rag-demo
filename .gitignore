@@ -1,0 +1,9 @@
+.env
+__pycache__
+.venv
+.env.example
+.env.prod
+.env.dev
+.env.test
+.env.local
+.env.prod.example

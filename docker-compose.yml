@@ -1,0 +1,17 @@
+services:
+  rag-chatbot:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag_chatbot_app
+    env_file:
+      - .env
+    volumes:
+      # Map local papers directory to container
+      # Allows adding new PDFs without rebuilding the image
+      - ./papers:/app/papers
+      # Optional: Map main.py for hot-reloading code changes during dev
+      - ./main.py:/app/main.py
+    # Keep standard input open and allocate a pseudo-TTY for CLI interaction
+    stdin_open: true
+    tty: true

@@ -1,0 +1,15 @@
+langchain-community==0.0.31
+langchain-openai==0.1.1
+langchain-text-splitters==0.0.1
+python-dotenv==1.0.1
+faiss-cpu==1.8.0
+unstructured==0.13.2
+unstructured-inference==0.7.27
+pdf2image==1.17.0
+pdfminer.six==20231228
+pikepdf==9.0.0
+pypdf==4.2.0
+pytesseract==0.3.10
+pillow-heif==0.16.0
+python-magic==0.4.27
+opencv-python-headless==4.9.0.80
