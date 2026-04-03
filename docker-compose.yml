@@ -10,8 +10,10 @@ services:
       # Map local papers directory to container
       # Allows adding new PDFs without rebuilding the image
       - ./papers:/app/papers
-      # Optional: Map main.py for hot-reloading code changes during dev
+      # Optional: Map main.py for hot-reloading during development
       - ./main.py:/app/main.py
+    # Optimization: Use init process to handle signals like Ctrl+C properly
+    init: true
     # Keep standard input open and allocate a pseudo-TTY for CLI interaction
     stdin_open: true
     tty: true

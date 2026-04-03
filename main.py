@@ -3,24 +3,32 @@ import os
 from dotenv import load_dotenv
 from langchain_community.document_loaders import DirectoryLoader, UnstructuredFileLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
 from langchain_community.vectorstores.utils import DistanceStrategy
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-# Load environment variables securely
+# Load environment variables from .env file
 load_dotenv()
 
 class DocumentLoaderService:
+    """Service to handle loading documents from a specified directory."""
     def __init__(self, directoryPath: str):
-        # Initialize the target directory containing raw data
+        """
+        Initialize the loader service.
+        :param directoryPath: Path to the directory containing documents.
+        """
         self.directoryPath = directoryPath
 
     def loadDocuments(self):
+        """
+        Scans the directory for PDF files and loads them.
+        :return: List of loaded documents.
+        """
         try:
-            # Configure DirectoryLoader to scan and load PDF files recursively
+            # Use DirectoryLoader to fetch all PDFs recursively using Unstructured
             loader = DirectoryLoader(
                 path=self.directoryPath,
                 glob="**/*.pdf",
@@ -37,14 +45,24 @@ class DocumentLoaderService:
             return []
 
 class TextSplitterService:
+    """Service to handle splitting large documents into smaller, manageable chunks."""
     def __init__(self, chunkSize: int = 1200, chunkOverlap: int = 200):
-        # Initialize text splitting constraints
+        """
+        Initialize the splitter service.
+        :param chunkSize: Maximum size of each text chunk.
+        :param chunkOverlap: Overlap between adjacent chunks to maintain context.
+        """
         self.chunkSize = chunkSize
         self.chunkOverlap = chunkOverlap
 
     def splitDocuments(self, rawDocuments):
+        """
+        Splits a list of documents into segments based on predefined separators.
+        :param rawDocuments: List of documents to split.
+        :return: List of document chunks.
+        """
         try:
-            # Define markdown separators to split text semantically
+            # Define hierarchical separators for semantic splitting
             markdownSeparators = [
                 "\n#{1,6} ",
                 "```\n",
@@ -75,13 +93,19 @@ class TextSplitterService:
             return []
 
 class VectorStoreService:
+    """Service to manage the creation and interaction with the vector database."""
     def __init__(self):
-        # Initialize OpenAI embedding model 
-        self.embeddingsModel = OpenAIEmbeddings(model="text-embedding-3-large")
+        """Initialize the embedding model (Google)."""
+        self.embeddingsModel = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
 
     def createVectorStore(self, splitDocuments):
+        """
+        Creates a FAISS vector store from document chunks.
+        :param splitDocuments: List of document chunks.
+        :return: Initialized FAISS vector store.
+        """
         try:
-            # Build FAISS vector database using cosine similarity strategy
+            # Build the vector database using Google's embedding model and cosine similarity
             vectorStore = FAISS.from_documents(
                 documents=splitDocuments,
                 embedding=self.embeddingsModel,
@@ -94,13 +118,19 @@ class VectorStoreService:
             return None
 
 class RagChatbotComponent:
+    """Core component that integrates the vector store with the LLM to provide RAG capabilities."""
     def __init__(self, vectorStore):
-        # Setup vector store, LLM, and structured prompt template
+        """
+        Initialize the chatbot component.
+        :param vectorStore: The vector database to retrieve context from.
+        """
         self.vectorStore = vectorStore
-        self.llmModel = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        # Using Google's Gemma 4 (31B Dense) for high-performance reasoning
+        self.llmModel = ChatGoogleGenerativeAI(model="gemma-4-31b-it", temperature=0)
         self.promptTemplate = self._createPromptTemplate()
 
     def _createPromptTemplate(self):
+        """Defines the system prompt and operational constraints for the AI."""
         # Define strict operational rules for the AI to prevent hallucinations
         systemPrompt = """
         You are a strict assistant. Focus on citations from private data sources.
@@ -138,10 +168,12 @@ class RagChatbotComponent:
             return None
 
 class ApplicationController:
+    """Main controller to orchestrate the RAG application workflow."""
     @staticmethod
     def execute():
+        """Executes the end-to-end RAG pipeline from loading to interactive chat."""
         try:
-            # Step 1: Extract data from PDFs
+            # Step 1: Load and parse documents from the local repository
             print("1. Loading raw documents...")
             loaderService = DocumentLoaderService(directoryPath="./papers")
             documents = loaderService.loadDocuments()
