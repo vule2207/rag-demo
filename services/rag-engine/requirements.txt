@@ -1,5 +1,6 @@
 langchain-community>=0.3.0
-langchain-google-genai>=2.0.0
+langchain-google-genai>=2.0.7
+google-generativeai>=0.8.0
 langchain-text-splitters>=0.3.0
 langchain-core>=0.3.0
 python-dotenv==1.0.1
@@ -16,3 +17,8 @@ pillow-heif==0.16.0
 python-magic==0.4.27
 opencv-python-headless==4.9.0.80
 matplotlib==3.8.4
+langchain-ollama>=0.2.0
+fastapi==0.110.0
+uvicorn==0.27.1
+python-multipart==0.0.9
+requests==2.31.0

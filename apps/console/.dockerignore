@@ -3,5 +3,4 @@ dist
 .env
 *.log
 .DS_Store
-Rag/papers/*
-!Rag/papers/.gitkeep
+build

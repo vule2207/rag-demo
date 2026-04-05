@@ -1,19 +1,45 @@
 services:
-  rag-chatbot:
-    build: 
-      context: .
+  # --- Frontend Application ---
+  console:
+    build:
+      context: ./apps/console
       dockerfile: Dockerfile
-    container_name: rag_chatbot_app
-    env_file:
-      - .env
+    ports:
+      - "80:80"
     volumes:
-      # Map local papers directory to container
-      # Allows adding new PDFs without rebuilding the image
-      - ./papers:/app/papers
-      # Optional: Map main.py for hot-reloading during development
-      - ./main.py:/app/main.py
-    # Optimization: Use init process to handle signals like Ctrl+C properly
-    init: true
-    # Keep standard input open and allocate a pseudo-TTY for CLI interaction
-    stdin_open: true
-    tty: true
+      - ./infra/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - mcp-bridge
+      - rag-engine
+    networks:
+      - app-net
+
+  # --- Agentic RAG Engine ---
+  rag-engine:
+    build:
+      context: ./services/rag-engine
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./services/rag-engine/.env
+    environment:
+      - MCP_URL=http://mcp-bridge:3000/api/mcp/execute
+    volumes:
+      - ./services/rag-engine/papers:/app/papers
+    networks:
+      - app-net
+
+  # --- MCP Connection Bridge ---
+  mcp-bridge:
+    build:
+      context: ./services/mcp-bridge
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge

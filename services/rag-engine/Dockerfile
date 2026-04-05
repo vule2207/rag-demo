@@ -67,5 +67,8 @@ RUN python -m nltk.downloader -d /usr/local/share/nltk_data punkt punkt_tab aver
 # Copy project code into the container with appropriate ownership
 COPY --chown=raguser:raguser . .
 
-# Default command to start the application
-CMD ["python", "main.py"]
+# Expose the API port
+EXPOSE 8000
+
+# Start the FastAPI server using uvicorn from the new app package
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
