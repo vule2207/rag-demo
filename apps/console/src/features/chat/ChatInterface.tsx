@@ -12,6 +12,8 @@ import {
   ChevronDown,
   Cpu
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Step {
   tool: string;
@@ -133,9 +135,9 @@ export const ChatInterface = ({
             chatHistory.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                 <div className={`max-w-[85%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div className={`p-5 rounded-2xl shadow-xl border ${msg.role === 'user'
-                    ? 'bg-indigo-600 text-white border-indigo-400/30'
-                    : 'bg-white/5 text-slate-100 border-white/10 backdrop-blur-md'
+                  <div className={`px-6 py-3 shadow-sm border ${msg.role === 'user'
+                    ? 'bg-indigo-600 text-white border-indigo-500/50 rounded-[28px] rounded-br-[8px]'
+                    : 'bg-transparent text-slate-200 border-transparent rounded-[28px] rounded-bl-[8px] w-full'
                     }`}>
                     {msg.role === 'assistant' && (
                       <div className="flex items-center gap-2 mb-3 text-[10px] font-bold text-indigo-400/80 tracking-widest uppercase">
@@ -143,33 +145,46 @@ export const ChatInterface = ({
                         Neural_Inference_Core
                       </div>
                     )}
-                    <p className="whitespace-pre-wrap leading-relaxed text-sm md:text-base font-medium">
-                      {msg.content}
-                    </p>
-                  </div>
+                    
+                    {/* Tool execution steps vizualization - Antigravity Style */}
+                    {msg.role === 'assistant' && msg.steps && msg.steps.length > 0 && (
+                      <details className="mb-4 group max-w-full w-full">
+                        <summary className="inline-flex items-center gap-2 cursor-pointer list-none text-slate-500 hover:text-slate-300 transition-colors text-xs font-semibold select-none rounded-full px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10">
+                          <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Show thinking</span>
+                          <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
+                        </summary>
+                        <div className="mt-3 pl-4 space-y-4 border-l-2 border-white/5 pt-2 max-w-full">
+                          {msg.steps.map((step, sIdx) => (
+                            <ToolStep key={sIdx} step={step} />
+                          ))}
+                        </div>
+                      </details>
+                    )}
 
-                  {/* Tool execution steps vizualization */}
-                  {msg.steps && msg.steps.length > 0 && (
-                    <div className="mt-4 w-full max-w-[95%] pl-4 space-y-4 border-l-2 border-white/5">
-                      {msg.steps.map((step, sIdx) => (
-                        <ToolStep key={sIdx} step={step} />
-                      ))}
-                    </div>
-                  )}
+                    {/* Content */}
+                    {msg.content && (
+                      <div className={`prose prose-invert max-w-none prose-sm md:prose-base leading-relaxed font-medium ${msg.role === 'user' ? 'text-white' : ''}`}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+
+                    {/* Inline Loading State */}
+                    {msg.role === 'assistant' && isBotTyping && idx === chatHistory.length - 1 && !msg.content && (
+                      <div className="flex items-center gap-3 animate-pulse opacity-70 mt-2">
+                        <div className="relative">
+                          <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                          <div className="absolute inset-0 blur-sm bg-indigo-500/20" />
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-400 tracking-widest uppercase italic border-l-2 border-indigo-500/30 pl-3">Synthesizing Intelligence...</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))
-          )}
-          {isBotTyping && (
-            <div className="flex justify-start">
-              <div className="bg-white/5 border border-white/10 p-5 rounded-3xl flex items-center gap-4 animate-pulse backdrop-blur-md shadow-xl">
-                <div className="relative">
-                  <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
-                  <div className="absolute inset-0 blur-sm bg-indigo-500/20 animate-pulse" />
-                </div>
-                <span className="text-xs font-bold text-slate-400 tracking-widest uppercase italic">Synthesizing Intelligence...</span>
-              </div>
-            </div>
           )}
           <div ref={chatEndRef} />
         </div>

@@ -35,7 +35,7 @@ def get_mcp_tools(retriever: Optional[Any] = None):
         try:
             response = requests.post(MCP_URL, json=payload, timeout=30)
             result = response.json()
-            return result['content'][0]['text'] if not result.get("isError") else result['content'][0]['text']
+            return result['content'][0]['text'] if 'content' in result else 'MCP Error: No content found'
         except Exception as e:
             return f"MCP Connectivity Error: {str(e)}"
 
@@ -48,7 +48,7 @@ def get_mcp_tools(retriever: Optional[Any] = None):
         try:
             response = requests.post(MCP_URL, json=payload, timeout=30)
             result = response.json()
-            return result['content'][0]['text'] if not result.get("isError") else result['content'][0]['text']
+            return result['content'][0]['text'] if 'content' in result else 'MCP Error: No content found'
         except Exception as e:
             return f"MCP Connectivity Error: {str(e)}"
 
@@ -64,7 +64,7 @@ def get_mcp_tools(retriever: Optional[Any] = None):
         try:
             response = requests.post(MCP_URL, json=payload, timeout=60)
             result = response.json()
-            return result['content'][0]['text'] if not result.get("isError") else result['content'][0]['text']
+            return result['content'][0]['text'] if 'content' in result else 'MCP Error: No content found'
         except Exception as e:
             return f"MCP Connectivity Error: {str(e)}"
 

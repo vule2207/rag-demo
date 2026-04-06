@@ -8,6 +8,47 @@ export const ragService = {
     if (!response.ok) throw new Error('RAG Chat failed');
     return response.json();
   },
+  async chatStream(message: string, onEvent: (event: any) => void) {
+    const response = await fetch('/api/rag/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+
+    if (!response.ok) throw new Error('RAG Chat stream failed');
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    if (!reader) return;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i].trim();
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.substring(6));
+              onEvent(data);
+            } catch (e) {
+              console.error('Error parsing SSE data', e);
+            }
+          }
+        }
+        buffer = lines[lines.length - 1];
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  },
+
 
   async upload(file: File) {
     const formData = new FormData();
