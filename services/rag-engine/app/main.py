@@ -26,16 +26,29 @@ app.add_middleware(
 engine = RagEngine()
 processor = DocumentProcessor()
 papers_dir = "./papers"
+vector_store_dir = "./faiss_index"
 agent_executor = None
 
 def get_agent():
     global agent_executor
     if not agent_executor:
         os.makedirs(papers_dir, exist_ok=True)
-        docs = processor.load_and_split(papers_dir)
-        engine.create_vector_store(docs)
         
-        # Tools initialized with retriever if store exists
+        # 1. Try Loading from Disk
+        if os.path.exists(vector_store_dir):
+            logger.info("Loading existing FAISS index from disk...")
+            engine.load_local(vector_store_dir)
+        
+        # 2. If load failed or not exists, try Indexing everything
+        if not engine.vector_store:
+            docs = [f for f in os.listdir(papers_dir) if f.endswith(".pdf")]
+            if docs:
+                logger.info("No index found. Creating new FAISS index from existing papers...")
+                all_docs = processor.load_and_split(papers_dir)
+                engine.create_vector_store(all_docs)
+                engine.save_local(vector_store_dir)
+        
+        # 3. Build/Rebuild Agent with the current retriever
         retriever = engine.vector_store.as_retriever(
             search_type="similarity_score_threshold",
             search_kwargs={"k": 5, "score_threshold": 0.2}
@@ -43,6 +56,7 @@ def get_agent():
         
         mcp_tools = get_mcp_tools(retriever=retriever)
         agent_executor = engine.build_agent(mcp_tools)
+        
     return agent_executor
 
 @app.post("/api/rag/chat", response_model=ChatResponse)
@@ -76,8 +90,17 @@ async def upload(file: UploadFile = File(...)):
     with open(path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    agent_executor = None # Force re-init
-    return {"message": "Uploaded and re-indexed."}
+    logger.info(f"Incrementally indexing new file: {file.filename}")
+    new_chunks = processor.load_file_and_split(path)
+    if new_chunks:
+        engine.add_documents(new_chunks)
+        engine.save_local(vector_store_dir)
+        
+        # Force re-init of agent to update retriever with new context
+        agent_executor = None 
+        get_agent() # Re-init immediately
+        
+    return {"message": f"Successfully uploaded and indexed {file.filename}."}
 
 @app.get("/api/rag/documents")
 async def list_docs():

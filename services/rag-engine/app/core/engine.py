@@ -31,6 +31,11 @@ class DocumentProcessor:
         docs = loader.load()
         return self.splitter.split_documents(docs)
 
+    def load_file_and_split(self, file_path: str) -> List:
+        loader = UnstructuredFileLoader(file_path)
+        docs = loader.load()
+        return self.splitter.split_documents(docs)
+
 class RagEngine:
     def __init__(self, model_name: str = "models/gemma-4-31b-it", embed_model: str = "models/gemini-embedding-001"):
         # Check if Google API Key is available
@@ -55,6 +60,33 @@ class RagEngine:
             embedding=self.embeddings,
             distance_strategy=DistanceStrategy.COSINE
         )
+        return self.vector_store
+
+    def save_local(self, folder_path: str):
+        if self.vector_store:
+            self.vector_store.save_local(folder_path)
+
+    def load_local(self, folder_path: str):
+        index_file = os.path.join(folder_path, "index.faiss")
+        if os.path.exists(index_file):
+            try:
+                self.vector_store = FAISS.load_local(
+                    folder_path, 
+                    self.embeddings, 
+                    allow_dangerous_deserialization=True
+                )
+                return self.vector_store
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to load FAISS index: {e}")
+                return None
+        return None
+
+    def add_documents(self, documents: List):
+        if not self.vector_store:
+            return self.create_vector_store(documents)
+        
+        self.vector_store.add_documents(documents)
         return self.vector_store
 
     def build_agent(self, tools: List):

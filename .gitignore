@@ -5,3 +5,9 @@ dist
 .DS_Store
 Rag/papers/*
 !Rag/papers/.gitkeep
+
+# RAG Engine Data
+services/rag-engine/faiss_index/
+services/rag-engine/papers/
+*.faiss
+*.pkl

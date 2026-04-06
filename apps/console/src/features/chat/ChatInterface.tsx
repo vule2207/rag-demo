@@ -93,8 +93,8 @@ export const ChatInterface = ({
 
   return (
     <div className="w-full h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
-      {/* Restored Original Header - with py-4 fix for clipping */}
-      <header className="flex items-center justify-between shrink-0">
+      {/* Header */}
+      <header className="flex items-center justify-between shrink-0 mb-8 mt-2">
         <div>
           <h2 className="text-3xl font-bold mb-2 text-white">Agentic RAG Console</h2>
           <p className="text-slate-400 flex items-center gap-2 text-sm font-medium">

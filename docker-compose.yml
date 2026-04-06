@@ -5,7 +5,7 @@ services:
       context: ./apps/console
       dockerfile: Dockerfile
     ports:
-      - "80:80"
+      - "8080:80"
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
@@ -22,11 +22,12 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ./services/rag-engine/.env
+      - ./.env
     environment:
       - MCP_URL=http://mcp-bridge:3000/api/mcp/execute
     volumes:
       - ./services/rag-engine/papers:/app/papers
+      - ./services/rag-engine/faiss_index:/app/faiss_index
     networks:
       - app-net
 
