@@ -11,14 +11,14 @@ export interface CompleteSetupDto extends TunnelConfigDto {
     sshHost: string;
 }
 
-@Controller('api/config')
+@Controller('config')
 export class ConfigController {
     constructor(
         private readonly tunnelService: SshTunnelService,
         private readonly mcpService: McpService
     ) { }
 
-    @Post('connect')
+    @Post('setup')
     async connectSystem(@Body() payload: CompleteSetupDto) {
         try {
             // 1. Establish the SSH tunnel mapping the remote DB to a local port
@@ -57,16 +57,6 @@ export class ConfigController {
             };
         } catch (error) {
             throw new InternalServerErrorException((error as Error).message);
-        }
-    }
-
-    @Post('execute')
-    async executeTool(@Body() payload: { name: string; arguments: any }) {
-        try {
-            const result = await this.mcpService.executeToolInternally(payload.name, payload.arguments);
-            return result;
-        } catch (error) {
-            throw new InternalServerErrorException(error.message);
         }
     }
 }

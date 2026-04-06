@@ -23,6 +23,7 @@ function App() {
       setIsConnected(true);
       setActiveTab('chat');
     } catch (error) {
+      console.log(error);
       alert("System connection failed. Check your credential logs.");
     } finally {
       setIsConnecting(false);
