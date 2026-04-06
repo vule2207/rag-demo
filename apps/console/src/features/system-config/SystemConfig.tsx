@@ -31,7 +31,7 @@ export const SystemConfig = ({
   };
 
   return (
-    <div className="w-full max-w-4xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <header>
         <h2 className="text-3xl font-bold mb-2">System Interconnect</h2>
         <p className="text-slate-400">Configure SSH tunnels and secure database bridges here.</p>

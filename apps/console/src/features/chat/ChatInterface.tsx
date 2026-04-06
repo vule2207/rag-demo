@@ -1,13 +1,13 @@
 import { useRef, useEffect } from 'react';
-import { 
-  MessageSquare, 
-  ShieldCheck, 
-  Activity, 
-  Send, 
-  Loader2, 
-  Database, 
-  Search, 
-  FileSearch, 
+import {
+  MessageSquare,
+  ShieldCheck,
+  Activity,
+  Send,
+  Loader2,
+  Database,
+  Search,
+  FileSearch,
   Terminal,
   ChevronDown,
   Cpu
@@ -56,14 +56,14 @@ const ToolStep = ({ step }: { step: Step }) => (
         Agent used: <span className="text-slate-200">{step.tool.replace(/_/g, ' ')}</span>
       </span>
     </div>
-    
+
     <div className="ml-8 space-y-2">
       {step.thought && (
         <p className="text-xs text-slate-500 italic leading-relaxed border-l-2 border-white/5 pl-3">
           {step.thought.split('Action:')[0].replace('Thought:', '').trim()}
         </p>
       )}
-      
+
       <div className="bg-slate-900/40 rounded-xl border border-white/5 overflow-hidden">
         <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 border-b border-white/5">
           <span className="text-[10px] font-mono text-slate-500 uppercase">Output Result</span>
@@ -92,7 +92,7 @@ export const ChatInterface = ({
   }, [chatHistory, isBotTyping]);
 
   return (
-    <div className="w-full max-w-4xl h-full flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden py-4">
+    <div className="w-full h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
       {/* Restored Original Header - with py-4 fix for clipping */}
       <header className="flex items-center justify-between shrink-0">
         <div>
@@ -133,11 +133,10 @@ export const ChatInterface = ({
             chatHistory.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                 <div className={`max-w-[85%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div className={`p-5 rounded-2xl shadow-xl border ${
-                    msg.role === 'user' 
-                      ? 'bg-indigo-600 text-white border-indigo-400/30' 
-                      : 'bg-white/5 text-slate-100 border-white/10 backdrop-blur-md'
-                  }`}>
+                  <div className={`p-5 rounded-2xl shadow-xl border ${msg.role === 'user'
+                    ? 'bg-indigo-600 text-white border-indigo-400/30'
+                    : 'bg-white/5 text-slate-100 border-white/10 backdrop-blur-md'
+                    }`}>
                     {msg.role === 'assistant' && (
                       <div className="flex items-center gap-2 mb-3 text-[10px] font-bold text-indigo-400/80 tracking-widest uppercase">
                         <Cpu className="w-3.5 h-3.5" />
@@ -178,15 +177,15 @@ export const ChatInterface = ({
         {/* Input Panel */}
         <div className="p-6 bg-white/5 border-t border-white/5 backdrop-blur-xl">
           <form onSubmit={handleSendMessage} className="flex gap-4 p-2 bg-slate-900/60 border border-white/10 rounded-2xl focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/20 transition-all shadow-inner">
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder={documentsCount > 0 ? "Query neural knowledge or production logs..." : "Add documents to activate RAG knowledge..."}
               disabled={isBotTyping}
               className="flex-1 bg-transparent px-4 py-3 outline-none text-slate-200 font-medium placeholder:text-slate-600 disabled:opacity-50"
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
             />
-            <button 
+            <button
               type="submit"
               disabled={!chatInput.trim() || isBotTyping}
               className="aspect-square w-12 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-700 text-white flex items-center justify-center rounded-xl transition-all shadow-xl active:scale-[0.9] group"
@@ -195,14 +194,14 @@ export const ChatInterface = ({
             </button>
           </form>
           <div className="mt-4 flex items-center justify-center gap-6">
-             <div className="flex items-center gap-1.5 opacity-40">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-300">Privacy Encrypted</span>
-             </div>
-             <div className="flex items-center gap-1.5 opacity-40">
-                <Database className="w-3 h-3 text-indigo-400" />
-                <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-300">MCP Bridge Active</span>
-             </div>
+            <div className="flex items-center gap-1.5 opacity-40">
+              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-300">Privacy Encrypted</span>
+            </div>
+            <div className="flex items-center gap-1.5 opacity-40">
+              <Database className="w-3 h-3 text-indigo-400" />
+              <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-300">MCP Bridge Active</span>
+            </div>
           </div>
         </div>
       </div>
