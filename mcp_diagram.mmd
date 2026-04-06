@@ -1,0 +1,35 @@
+sequenceDiagram
+    autonumber
+    participant App as Host App (e.g. Chat UI)
+    participant Client as MCP Client (LangChain/LLM)
+    participant Trans as Transport (Stdio/SSE)
+    participant Server as MCP Server
+    participant System as Local System / DB
+
+    Note over App,Server: Phase 1: Handshake & Discovery
+    Client->>Trans: init()
+    Trans->>Server: InitializeRequest (Client Capabilities)
+    Server-->>Trans: InitializeResult (Server Capabilities)
+    Trans-->>Client: Process Ready
+    
+    Client->>Trans: tools/list
+    Trans->>Server: Get tools list
+    Server-->>Trans: [ {name: "execute_sql", schema: {...}} ]
+    Trans-->>Client: Tools list
+    Client->>App: Show "Tools Connected"
+
+    Note over App,Server: Phase 2: Agentic Execution Loop
+    App->>Client: User Prompt: "Get 5 latest users"
+    Client->>Client: Reason (LLM): Need execute_sql
+    
+    Client->>Trans: tools/call {name: "execute_sql", args: {query: "SELECT * FROM users LIMIT 5"} }
+    Trans->>Server: Forward Tool Call
+    Note right of Server: Server validates JSON Schema
+    Server->>System: Execute SQL
+    System-->>Server: Raw Data (Rows)
+    
+    Server-->>Trans: CallToolResult {content: [{type: "text", text: "[{user1...}]"}]}
+    Trans-->>Client: Tool Output
+    
+    Client->>Client: Synthesize (LLM): Finalize Answer
+    Client->>App: "Here are the 5 latest users: ..."
