@@ -1,5 +1,16 @@
-import React, { useState } from 'react';
-import { ShieldCheck, ShieldAlert, Server, Database, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, ShieldAlert, Server, Database, Loader2, Wrench, Terminal, Cpu, Search, Code, Info } from 'lucide-react';
+import { mcpService } from '../../services/api';
+
+interface McpTool {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: string;
+    properties: Record<string, any>;
+    required?: string[];
+  };
+}
 
 interface SystemConfigProps {
   onConnect: (config: any) => void;
@@ -24,6 +35,29 @@ export const SystemConfig = ({
     dbPort: 3306,
     localPort: 3307
   });
+
+  const [tools, setTools] = useState<McpTool[]>([]);
+  const [isLoadingTools, setIsLoadingTools] = useState(false);
+
+  useEffect(() => {
+    if (isConnected) {
+      fetchTools();
+    } else {
+      setTools([]);
+    }
+  }, [isConnected]);
+
+  const fetchTools = async () => {
+    setIsLoadingTools(true);
+    try {
+      const data = await mcpService.getTools();
+      setTools(data.tools || []);
+    } catch (error) {
+      console.error("Failed to fetch tools", error);
+    } finally {
+      setIsLoadingTools(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,6 +141,58 @@ export const SystemConfig = ({
           )}
         </div>
       </form>
+
+      {isConnected && (
+        <div className="space-y-6 pt-8 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-500/10 rounded-lg">
+              <Cpu className="w-6 h-6 text-indigo-400" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold">MCP Capabilities</h3>
+              <p className="text-slate-400 text-sm">Real-time tools exposed by the connected MCP server.</p>
+            </div>
+          </div>
+
+          {isLoadingTools ? (
+            <div className="flex items-center gap-2 text-slate-500 animate-pulse py-8">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Scanning for available tools...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {tools.length > 0 ? tools.map((tool: McpTool) => (
+                <div key={tool.name} className="group bg-[#161b26]/40 hover:bg-[#1c2331]/60 backdrop-blur-sm border border-white/5 hover:border-indigo-500/30 rounded-2xl p-5 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="p-2 bg-slate-900/80 rounded-xl border border-white/5 group-hover:border-indigo-500/20 transition-colors">
+                      {tool.name.includes('query') || tool.name.includes('db') ? <Database className="w-5 h-5 text-emerald-400" /> : 
+                       tool.name.includes('log') ? <Search className="w-5 h-5 text-amber-400" /> : 
+                       <Terminal className="w-5 h-5 text-indigo-400" />}
+                    </div>
+                    <Wrench className="w-4 h-4 text-slate-700 group-hover:text-indigo-400/50 transition-colors" />
+                  </div>
+                  <h4 className="font-bold text-slate-200 mb-1 group-hover:text-indigo-300 transition-colors">{tool.name}</h4>
+                  <p className="text-xs text-slate-400 leading-relaxed line-clamp-3 mb-4">
+                    {tool.description}
+                  </p>
+                  
+                  <div className="flex items-center gap-2 pt-3 border-t border-white/5">
+                    <Code className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+                      {Object.keys(tool.inputSchema.properties || {}).length} Parameters
+                    </span>
+                  </div>
+                </div>
+              )) : (
+                <div className="col-span-full py-12 text-center bg-slate-900/20 rounded-3xl border border-dashed border-white/10">
+                  <Info className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                  <p className="text-slate-500">No tools detected. Ensure the MCP server is operational.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

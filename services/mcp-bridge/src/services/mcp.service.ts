@@ -50,59 +50,63 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
+    public getTools() {
+        return {
+            tools: [
+                {
+                    name: 'execute_read_query',
+                    description: 'Executes a safe SELECT query on the production database.',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            sqlQuery: { type: 'string', description: 'The SELECT SQL statement.' },
+                        },
+                        required: ['sqlQuery'],
+                    },
+                },
+                {
+                    name: 'get_database_schema',
+                    description: 'Get the list of all tables and columns in the database. CALL THIS TOOL FIRST if you are not sure about the table or column names when writing SQL.',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {},
+                    },
+                },
+                {
+                    name: 'search_api_logs',
+                    description: 'Fetch and search multi-line API logs organized by date. Requires specific log type and exact date.',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            logType: {
+                                type: 'string',
+                                enum: ['get', 'post', 'put', 'delete', 'response'],
+                                description: 'The specific log file category to read.'
+                            },
+                            date: {
+                                type: 'string',
+                                description: 'The exact date of the log file in YYYYMMDD format (e.g., 20260331).'
+                            },
+                            keywords: {
+                                type: 'array',
+                                items: { type: 'string' },
+                                description: 'Optional. Array of exact keywords to match within the SAME log block.'
+                            },
+                            tailLines: {
+                                type: 'number',
+                                description: 'Optional. Number of raw lines to fetch from the end of the file. Default is 2000.'
+                            }
+                        },
+                        required: ['logType', 'date'],
+                    },
+                }
+            ],
+        };
+    }
+
     private setupMcpHandlers() {
         this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-            return {
-                tools: [
-                    {
-                        name: 'execute_read_query',
-                        description: 'Executes a safe SELECT query on the production database.',
-                        inputSchema: {
-                            type: 'object',
-                            properties: {
-                                sqlQuery: { type: 'string', description: 'The SELECT SQL statement.' },
-                            },
-                            required: ['sqlQuery'],
-                        },
-                    },
-                    {
-                        name: 'get_database_schema',
-                        description: 'Get the list of all tables and columns in the database. CALL THIS TOOL FIRST if you are not sure about the table or column names when writing SQL.',
-                        inputSchema: {
-                            type: 'object',
-                            properties: {},
-                        },
-                    },
-                    {
-                        name: 'search_api_logs',
-                        description: 'Fetch and search multi-line API logs organized by date. Requires specific log type and exact date.',
-                        inputSchema: {
-                            type: 'object',
-                            properties: {
-                                logType: {
-                                    type: 'string',
-                                    enum: ['get', 'post', 'put', 'delete', 'response'],
-                                    description: 'The specific log file category to read.'
-                                },
-                                date: {
-                                    type: 'string',
-                                    description: 'The exact date of the log file in YYYYMMDD format (e.g., 20260331).'
-                                },
-                                keywords: {
-                                    type: 'array',
-                                    items: { type: 'string' },
-                                    description: 'Optional. Array of exact keywords to match within the SAME log block.'
-                                },
-                                tailLines: {
-                                    type: 'number',
-                                    description: 'Optional. Number of raw lines to fetch from the end of the file. Default is 2000.'
-                                }
-                            },
-                            required: ['logType', 'date'],
-                        },
-                    }
-                ],
-            };
+            return this.getTools();
         });
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -198,16 +202,45 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
             } else {
                 absolutePath = `/home/HanbiroMailcore/GWDATA/${this.currentHost}/logs/${logType}/${date}.log`;
             }
-            const linesToFetch = Math.min(Number(tailLines) || 2000, 5000);
-            let shellCommand = `tail -n ${linesToFetch} ${absolutePath}`;
+            const recordsLimit = Math.min(Number(tailLines) || 2000, 5000);
+            let awkConditions = '1';
+
             if (keywords && Array.isArray(keywords) && keywords.length > 0) {
                 const sanitizedKeywords = keywords.map(kw => String(kw).replace(/[^a-zA-Z0-9_ \-\.\/]/g, '')).filter(kw => kw.trim() !== '');
                 if (sanitizedKeywords.length > 0) {
-                    const awkConditions = sanitizedKeywords.map(kw => `record ~ /${kw.replace(/\//g, '\\/')}/`).join(' && ');
-                    const awkScript = `BEGIN { record = "" } /^Array/ { if (record != "" && ${awkConditions}) { print record; print "---"; } record = $0; next; } { record = record "\\n" $0 } END { if (record != "" && ${awkConditions}) { print record; print "---"; } }`;
-                    shellCommand += ` | awk '${awkScript.replace(/\n/g, ' ').replace(/\s+/g, ' ')}'`;
+                    awkConditions = sanitizedKeywords.map(kw => `record ~ /${kw.replace(/\//g, '\\/')}/`).join(' && ');
                 }
             }
+
+            const awkScript = `
+                BEGIN { record = ""; count = 0 }
+                /^Array/ { 
+                    if (record != "" && (${awkConditions})) { 
+                        a[count % ${recordsLimit}] = record; 
+                        count++; 
+                    } 
+                    record = $0; 
+                    next; 
+                } 
+                { 
+                    if (record == "") record = $0; 
+                    else record = record "\\n" $0; 
+                } 
+                END { 
+                    if (record != "" && (${awkConditions})) { 
+                        a[count % ${recordsLimit}] = record; 
+                        count++; 
+                    } 
+                    for (i = 0; i < ${recordsLimit}; i++) { 
+                        j = (count + i) % ${recordsLimit}; 
+                        if (j in a) { 
+                            print a[j]; 
+                            print "---"; 
+                        } 
+                    } 
+                }
+            `;
+            const shellCommand = `awk '${awkScript.replace(/\n/g, ' ').replace(/\s+/g, ' ')}' ${absolutePath}`;
             const logContent = await this.sshTunnelService.executeRemoteCommand(shellCommand);
             return {
                 content: [{ type: 'text', text: logContent || 'No matches found.' }],

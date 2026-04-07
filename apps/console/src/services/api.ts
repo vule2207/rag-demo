@@ -93,5 +93,11 @@ export const mcpService = {
     });
     if (!response.ok) throw new Error('Disconnect failed');
     return response.json();
+  },
+  
+  async getTools() {
+    const response = await fetch('/api/mcp/tools');
+    if (!response.ok) throw new Error('Failed to fetch tools');
+    return response.json();
   }
 };

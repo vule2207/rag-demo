@@ -24,18 +24,31 @@ def get_mcp_tools(retriever: Optional[Any] = None):
         if not docs:
             return "No relevant information found."
         
-        return "\n\n---\n\n".join([d.page_content for d in docs])
+        # Limit the amount of text returned to avoid hitting model limits
+        full_text = "\n\n---\n\n".join([d.page_content for d in docs])
+        max_chars = 40000 
+        if len(full_text) > max_chars:
+            return full_text[:max_chars] + "\n\n[... Truncated for token limit ...]"
+        return full_text
 
     @tool
     def query_database(sql_query: str) -> str:
         """
-        Executes a safe SELECT SQL query on the production database.
+        Executes a safe SELECT SQL query on the production database. 
+        Use this for structured business data, employee records, or current status. 
+        DO NOT use this for raw activity logs or event history.
         """
         payload = {"name": "execute_read_query", "arguments": {"sqlQuery": sql_query}}
         try:
             response = requests.post(MCP_URL, json=payload, timeout=30)
             result = response.json()
-            return result['content'][0]['text'] if 'content' in result else 'MCP Error: No content found'
+            content = result['content'][0]['text'] if 'content' in result else 'MCP Error: No content found'
+            
+            # Truncate database outputs if they are huge
+            max_chars = 30000
+            if len(content) > max_chars:
+                return content[:max_chars] + "\n\n[... Database result truncated ...]"
+            return content
         except Exception as e:
             return f"MCP Connectivity Error: {str(e)}"
 
@@ -48,7 +61,13 @@ def get_mcp_tools(retriever: Optional[Any] = None):
         try:
             response = requests.post(MCP_URL, json=payload, timeout=30)
             result = response.json()
-            return result['content'][0]['text'] if 'content' in result else 'MCP Error: No content found'
+            content = result['content'][0]['text'] if 'content' in result else 'MCP Error: No content found'
+            
+            # Schemas can be huge, but truncated ones might be useless for the AI. 
+            # We'll allow up to 40k chars.
+            if len(content) > 40000:
+                return content[:40000] + "\n\n[... Schema truncated ...]"
+            return content
         except Exception as e:
             return f"MCP Connectivity Error: {str(e)}"
 
@@ -64,7 +83,13 @@ def get_mcp_tools(retriever: Optional[Any] = None):
         try:
             response = requests.post(MCP_URL, json=payload, timeout=60)
             result = response.json()
-            return result['content'][0]['text'] if 'content' in result else 'MCP Error: No content found'
+            content = result['content'][0]['text'] if 'content' in result else 'MCP Error: No content found'
+            
+            # Logs are the biggest culprit for token overflow
+            max_chars = 50000
+            if len(content) > max_chars:
+                return content[:max_chars] + "\n\n[... Log content truncated ...]"
+            return content
         except Exception as e:
             return f"MCP Connectivity Error: {str(e)}"
 
