@@ -1,6 +1,6 @@
 import os
 import requests
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 from langchain_core.tools import tool
 
 MCP_URL = os.getenv("MCP_URL", "http://mcp-bridge:3000/api/mcp/execute")
@@ -53,11 +53,18 @@ def get_mcp_tools(retriever: Optional[Any] = None):
             return f"MCP Connectivity Error: {str(e)}"
 
     @tool
-    def get_database_schema() -> str:
+    def get_database_schema(tables: Optional[Union[str, List[str]]] = None) -> str:
         """
-        Fetch database schema for all tables and columns. CALL THIS if unsure of names.
+        Fetch database schema. If 'tables' is empty, returns only a list of all table names.
+        Always fetch the table names first if you don't know them, then call this tool again 
+        providing specific 'tables' list to get detailed columns for those tables.
         """
         payload = {"name": "get_database_schema", "arguments": {}}
+        if tables:
+            # Accept a single string or a list of strings; coerce to list for payload
+            if isinstance(tables, str):
+                tables = [tables]
+            payload["arguments"]["tables"] = tables
         try:
             response = requests.post(MCP_URL, json=payload, timeout=30)
             result = response.json()

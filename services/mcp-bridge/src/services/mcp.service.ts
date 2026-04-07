@@ -66,10 +66,16 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
                 },
                 {
                     name: 'get_database_schema',
-                    description: 'Get the list of all tables and columns in the database. CALL THIS TOOL FIRST if you are not sure about the table or column names when writing SQL.',
+                    description: 'Fetch database schema. If "tables" is empty or omitted, returns ONLY a list of all available table names. If "tables" is provided, returns detailed column schemas for those specific tables. CALL THIS FIRST without arguments to see available tables, then call again with specific table names to get their columns before writing SQL.',
                     inputSchema: {
                         type: 'object',
-                        properties: {},
+                        properties: {
+                            tables: {
+                                type: 'array',
+                                items: { type: 'string' },
+                                description: 'Optional list of table names to fetch schema for. Leave empty to get all table names.'
+                            }
+                        },
                     },
                 },
                 {
@@ -120,7 +126,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
             return this.handleExecuteReadQuery(args?.sqlQuery);
         }
         if (name === 'get_database_schema') {
-            return this.handleGetDatabaseSchema();
+            return this.handleGetDatabaseSchema(args?.tables);
         }
         if (name === 'search_api_logs') {
             return this.handleSearchApiLogs(args);
@@ -154,7 +160,7 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    private async handleGetDatabaseSchema() {
+    private async handleGetDatabaseSchema(tables?: string[]) {
         if (!this.dbPool) {
             return {
                 content: [{ type: 'text', text: 'Database is not connected. Please configure via UI first.' }],
@@ -162,12 +168,26 @@ export class McpService implements OnModuleInit, OnModuleDestroy {
             };
         }
         try {
-            const sqlQuery = `
-                SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE 
-                FROM information_schema.columns 
-                WHERE table_schema = DATABASE()
-            `;
-            const [rows] = await this.dbPool.query(sqlQuery);
+            let sqlQuery = '';
+            let queryParams: any[] = [];
+            
+            if (tables && Array.isArray(tables) && tables.length > 0) {
+                const placeholders = tables.map(() => '?').join(', ');
+                sqlQuery = `
+                    SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE 
+                    FROM information_schema.columns 
+                    WHERE table_schema = DATABASE() AND TABLE_NAME IN (${placeholders})
+                `;
+                queryParams = tables;
+            } else {
+                sqlQuery = `
+                    SELECT TABLE_NAME 
+                    FROM information_schema.tables 
+                    WHERE table_schema = DATABASE()
+                `;
+            }
+            
+            const [rows] = await this.dbPool.query(sqlQuery, queryParams);
             return {
                 content: [{ type: 'text', text: JSON.stringify(rows, null, 2) }],
             };

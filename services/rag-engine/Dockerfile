@@ -1,74 +1,67 @@
-# Use python 3.11-slim for compatibility with RAG libraries
+# Optimized rag-engine Dockerfile (size < 1GB)
+
+# ---------- Builder stage ----------
 FROM python:3.11-slim AS builder
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /build
 
-# Install necessary build tools and development libraries
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libmagic-dev \
-    libheif-dev \
-    gcc
+# Install build‑time dependencies (only needed for compiling wheels)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libmagic-dev \
+        libheif-dev \
+        gcc && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install dependencies into a temporary directory for copying to the final stage
+# Install Python packages without cache
 COPY requirements.txt .
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip && \
-    pip install --prefix=/install -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-
-# Stage 2: Runtime
+# ---------- Runtime stage ----------
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV NLTK_DATA=/usr/local/share/nltk_data
-# Ensure scripts in .local/bin are executable if they exist
-ENV PATH="/home/raguser/.local/bin:${PATH}"
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    NLTK_DATA=/usr/local/share/nltk_data
 
 WORKDIR /app
 
-# Install runtime dependencies only
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils \
-    tesseract-ocr \
-    tesseract-ocr-eng \
-    tesseract-ocr-vie \
-    libmagic1 \
-    libheif1 \
-    libgl1 \
-    libglib2.0-0 \
-    patchelf \
-    && rm -rf /var/lib/apt/lists/*
+# Install only runtime system packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        poppler-utils \
+        tesseract-ocr \
+        tesseract-ocr-eng \
+        tesseract-ocr-vie \
+        libmagic1 \
+        libheif1 \
+        libgl1 \
+        libglib2.0-0 \
+        patchelf && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy installed python packages from the builder stage
+# Copy compiled Python packages from builder
 COPY --from=builder /install /usr/local
 
-# Xóa cờ 'executable stack' của onnxruntime để tránh lỗi Invalid argument trên kernel mới
-RUN patchelf --clear-execstack /usr/local/lib/python3.11/site-packages/onnxruntime/capi/*.so || true
+# Patch ONNX Runtime and then remove patchelf (no longer needed)
+RUN patchelf --clear-execstack /usr/local/lib/python3.11/site-packages/onnxruntime/capi/*.so || true && \
+    apt-get purge -y patchelf && \
+    rm -rf /var/lib/apt/lists/*
 
-# Create a non-privileged user to run the application for enhanced security
+# Create non‑privileged user and set permissions
 RUN useradd -m raguser && \
     mkdir -p /usr/local/share/nltk_data && \
     chown -R raguser:raguser /app /usr/local/share/nltk_data
-
 USER raguser
 
-# Download NLTK data during image build to avoid runtime delays
-RUN python -m nltk.downloader -d /usr/local/share/nltk_data punkt punkt_tab averaged_perceptron_tagger averaged_perceptron_tagger_eng
+# Pre‑download required NLTK data (small footprint)
+RUN python -m nltk.downloader -d /usr/local/share/nltk_data punkt averaged_perceptron_tagger
 
-# Copy project code into the container with appropriate ownership
+# Copy application source (exclude heavy data via .dockerignore)
 COPY --chown=raguser:raguser . .
 
-# Expose the API port
 EXPOSE 8000
-
-# Start the FastAPI server using uvicorn from the new app package
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
