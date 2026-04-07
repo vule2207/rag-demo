@@ -3,12 +3,14 @@ import shutil
 import logging
 import traceback
 import json
+import asyncio
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .schema.models import ChatRequest, ChatResponse, HealthResponse, ToolStep
 from .core.engine import DocumentProcessor, RagEngine
 from .tools.mcp_tools import get_mcp_tools
+from langchain_core.messages import HumanMessage, AIMessage
 
 app = FastAPI(title="Rag Engine API", version="2.0.0")
 
@@ -61,10 +63,27 @@ def get_agent():
         
     return agent_executor
 
+def format_chat_history(history):
+    if not history:
+        return []
+    
+    formatted = []
+    for entry in history:
+        role = entry.get("role")
+        content = entry.get("content", "")
+        if role == "user":
+            formatted.append(HumanMessage(content=content))
+        elif role == "assistant":
+            formatted.append(AIMessage(content=content))
+            
+    # Limit to last 10 messages (5 rounds) to prevent token overflow
+    return formatted[-10:]
+
 @app.post("/api/rag/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, agent=Depends(get_agent)):
     try:
-        result = agent.invoke({"input": request.message})
+        chat_history = format_chat_history(request.history)
+        result = agent.invoke({"input": request.message, "chat_history": chat_history})
         
         steps = [
             ToolStep(
@@ -85,9 +104,9 @@ async def chat(request: ChatRequest, agent=Depends(get_agent)):
 async def chat_stream(request: ChatRequest, agent=Depends(get_agent)):
     async def event_generator():
         try:
-            import asyncio
+            chat_history = format_chat_history(request.history)
             async for event in agent.astream_events(
-                {"input": request.message},
+                {"input": request.message, "chat_history": chat_history},
                 version="v2",
             ):
                 kind = event["event"]

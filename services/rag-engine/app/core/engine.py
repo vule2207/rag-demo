@@ -6,7 +6,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmb
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_community.vectorstores import FAISS
 from langchain_community.vectorstores.utils import DistanceStrategy
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain.agents import AgentExecutor, create_structured_chat_agent
@@ -100,8 +100,16 @@ class RagEngine:
             "Do not add any text, thoughts, or analysis after the JSON blob. One action per response."
         )
         
-        if hasattr(base_prompt, 'messages') and len(base_prompt.messages) > 0:
-            base_prompt.messages[0].prompt.template += custom_instruction
+        if hasattr(base_prompt, 'messages'):
+            if len(base_prompt.messages) > 0:
+                base_prompt.messages[0].prompt.template += custom_instruction
+            
+            # Insert chat_history placeholder between system and human message
+            if len(base_prompt.messages) >= 2:
+                base_prompt.messages.insert(1, MessagesPlaceholder(variable_name="chat_history"))
+            else:
+                # Fallback if prompt structure is different - append it
+                base_prompt.messages.append(MessagesPlaceholder(variable_name="chat_history"))
 
         agent = create_structured_chat_agent(self.llm, tools, base_prompt)
         
