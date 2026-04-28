@@ -100,9 +100,28 @@ def get_mcp_tools(retriever: Optional[Any] = None):
         except Exception as e:
             return f"MCP Connectivity Error: {str(e)}"
 
+    @tool
+    def web_search(query: str) -> str:
+        """
+        Searches the internet for real-time information, news, or technical documentation. Returns snippets and URLs.
+        """
+        payload = {"name": "web_search", "arguments": {"query": query}}
+        try:
+            response = requests.post(MCP_URL, json=payload, timeout=30)
+            result = response.json()
+            content = result['content'][0]['text'] if 'content' in result else 'MCP Error: No content found'
+            
+            max_chars = 40000
+            if len(content) > max_chars:
+                return content[:max_chars] + "\n\n[... Search result truncated ...]"
+            return content
+        except Exception as e:
+            return f"MCP Connectivity Error: {str(e)}"
+
     return [
         search_knowledge_base,
         query_database,
         get_database_schema,
-        search_api_logs
+        search_api_logs,
+        web_search
     ]

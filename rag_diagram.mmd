@@ -1,4 +1,4 @@
-graph TD
+graph LR
     %% Styling Definitions
     classDef ingest fill:#fdf4ff,stroke:#d946ef,stroke-width:2px,color:#701a75;
     classDef process fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#1e3a8a;
@@ -6,28 +6,26 @@ graph TD
     classDef llm fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#78350f;
     classDef user fill:#fef2f2,stroke:#ef4444,stroke-width:2px,color:#7f1d1d;
 
-    subgraph Ingestion["Ingestion Pipeline"]
-        A[Sources]:::ingest -->|Raw Data| B(Loaders):::ingest
-        B --> C{Cleaning}:::ingest
-        C -->|Clean Data| D(Splitters):::ingest
-        D -->|Chunks| E[Chunking]:::ingest
-        E -->|Metadata| F(Embedding):::ingest
-        F --> G[(Vector DB)]:::storage
+    subgraph Ingestion["1. Ingestion Pipeline"]
+        A[Data Sources]:::ingest -->|Raw Data| B(Document Loaders):::ingest
+        B -->|Parsed Data| D(Text Splitters / Chunking):::ingest
+        D -->|Chunks| F(Embedding Model):::ingest
+        F -->|Vectors| G[(Vector DB)]:::storage
     end
 
-    subgraph Retrieval["Retrieval Process"]
-        H((User Query)):::user --> I[Query Rewrite]:::process
-        I -->|Refined| J(Embedding):::process
-        J --> K{Vector Search}:::process
-        G -.->|Top Chunks| K
+    subgraph Retrieval["2. Retrieval Process"]
+        H((User Query)):::user --> I[Query Rewrite / Routing]:::process
+        I -->|Refined Query| J(Embedding Model):::process
+        J -->|Query Vector| K{Vector Search}:::process
+        G -.->|Retrieved Chunks| K
         K --> L(Re-Ranker):::process
         L -->|Best Context| M[Context Window]:::process
     end
 
-    subgraph Generation["Generation"]
+    subgraph Generation["3. Generation"]
         M --> N(Prompt Builder):::llm
-        H --> N
-        N -->|Context+Query| O((LLM Engine)):::llm
+        H -.->|Original Query| N
+        N -->|Augmented Prompt| O((LLM Engine)):::llm
         O --> P[Output Parser]:::llm
         P --> Q((Final Answer)):::llm
     end
