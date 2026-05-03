@@ -7,8 +7,9 @@ import asyncio
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from .schema.models import ChatRequest, ChatResponse, HealthResponse, ToolStep
+from .schema.models import ChatRequest, ChatResponse, HealthResponse, ToolStep, SessionListResponse, SessionMetadata
 from .core.engine import DocumentProcessor, RagEngine
+from .core.session_manager import SessionManager
 from .tools.mcp_tools import get_mcp_tools
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -29,6 +30,7 @@ app.add_middleware(
 # Shared State
 engine = RagEngine()
 processor = DocumentProcessor()
+session_manager = SessionManager()
 papers_dir = "./papers"
 vector_store_dir = "./faiss_index"
 agent_executor = None
@@ -82,7 +84,13 @@ def format_chat_history(history):
 @app.post("/api/rag/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, agent=Depends(get_agent)):
     try:
-        chat_history = format_chat_history(request.history)
+        # 1. Handle Context from Disk if session_id is provided but history is empty
+        history = request.history
+        if not history and request.session_id:
+            stored_messages = session_manager.get_messages(request.session_id)
+            history = [{"role": m["role"], "content": m["content"]} for m in stored_messages]
+            
+        chat_history = format_chat_history(history)
         result = agent.invoke({"input": request.message, "chat_history": chat_history})
         
         steps = [
@@ -94,6 +102,11 @@ async def chat(request: ChatRequest, agent=Depends(get_agent)):
             ) for a, o in result.get("intermediate_steps", [])
         ]
 
+        # 2. Persist if session_id exists
+        if request.session_id:
+            session_manager.add_message(request.session_id, "user", request.message)
+            session_manager.add_message(request.session_id, "assistant", result["output"], steps=[s.dict() for s in steps])
+
         return ChatResponse(answer=result["output"], steps=steps)
     except Exception as e:
         logger.error(f"Chat execution failed: {str(e)}")
@@ -104,7 +117,21 @@ async def chat(request: ChatRequest, agent=Depends(get_agent)):
 async def chat_stream(request: ChatRequest, agent=Depends(get_agent)):
     async def event_generator():
         try:
-            chat_history = format_chat_history(request.history)
+            # 1. Handle Context from Disk
+            history = request.history
+            if not history and request.session_id:
+                stored_messages = session_manager.get_messages(request.session_id)
+                history = [{"role": m["role"], "content": m["content"]} for m in stored_messages]
+
+            chat_history = format_chat_history(history)
+            
+            # Save user message immediately
+            if request.session_id:
+                session_manager.add_message(request.session_id, "user", request.message)
+
+            full_answer = ""
+            collected_steps = []
+
             async for event in agent.astream_events(
                 {"input": request.message, "chat_history": chat_history},
                 version="v2",
@@ -112,20 +139,31 @@ async def chat_stream(request: ChatRequest, agent=Depends(get_agent)):
                 kind = event["event"]
                 
                 if kind == "on_tool_start":
-                    yield f"data: {json.dumps({'type': 'step_start', 'data': {'tool': event['name'], 'tool_input': event['data'].get('input', '')}})}\n\n"
+                    step_data = {'tool': event['name'], 'tool_input': event['data'].get('input', '')}
+                    collected_steps.append({'tool': event['name'], 'tool_input': event['data'].get('input', ''), 'thought': '', 'output': ''})
+                    yield f"data: {json.dumps({'type': 'step_start', 'data': step_data})}\n\n"
                 elif kind == "on_tool_end":
                     output = event['data'].get('output', '')
+                    # Update last step output
+                    for step in reversed(collected_steps):
+                        if step['tool'] == event['name'] and not step['output']:
+                            step['output'] = str(output)[:1000]
+                            break
                     yield f"data: {json.dumps({'type': 'step_end', 'data': {'tool': event['name'], 'output': str(output)[:1000]}})}\n\n"
                 
                 elif kind == "on_chain_end" and event["name"] == "AgentExecutor":
                     final_answer = event["data"].get("output", {}).get("output", "")
                     if final_answer:
-                        # Chunk the final answer to simulate real-time typing effect seamlessly
+                        full_answer = final_answer
                         chunk_size = 5
                         for i in range(0, len(final_answer), chunk_size):
                             chunk = final_answer[i:i+chunk_size]
                             yield f"data: {json.dumps({'type': 'answer_chunk', 'data': chunk})}\n\n"
                             await asyncio.sleep(0.02)
+                    
+                    # Save assistant response at the end
+                    if request.session_id and full_answer:
+                        session_manager.add_message(request.session_id, "assistant", full_answer, steps=collected_steps)
                     
                     yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
@@ -135,6 +173,28 @@ async def chat_stream(request: ChatRequest, agent=Depends(get_agent)):
             yield f"data: {json.dumps({'type': 'error', 'data': str(e)})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+# --- Session Management Endpoints ---
+
+@app.get("/api/rag/sessions", response_model=SessionListResponse)
+async def list_sessions():
+    return {"sessions": session_manager.list_sessions()}
+
+@app.post("/api/rag/sessions")
+async def create_session():
+    return session_manager.create_session()
+
+@app.get("/api/rag/sessions/{session_id}")
+async def get_session(session_id: str):
+    messages = session_manager.get_messages(session_id)
+    if not messages and not os.path.exists(os.path.join(session_manager.base_path, session_id)):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"messages": messages}
+
+@app.delete("/api/rag/sessions/{session_id}")
+async def delete_session(session_id: str):
+    session_manager.delete_session(session_id)
+    return {"message": "Session deleted"}
 
 @app.post("/api/rag/upload")
 async def upload(file: UploadFile = File(...)):

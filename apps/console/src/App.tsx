@@ -13,7 +13,17 @@ function App() {
   const [isConnecting, setIsConnecting] = useState(false);
 
   // Use our specialized hooks
-  const { chatHistory, chatInput, setChatInput, isBotTyping, handleSendMessage } = useChat();
+  const { 
+    chatHistory, 
+    chatInput, 
+    setChatInput, 
+    isBotTyping, 
+    handleSendMessage, 
+    currentSessionId, 
+    loadSession, 
+    startNewChat 
+  } = useChat();
+  
   const { documents, isUploading, handleUpload, handleDelete } = useKnowledgeBase();
 
   const handleConnect = async (config: any) => {
@@ -22,6 +32,8 @@ function App() {
       await mcpService.connect(config);
       setIsConnected(true);
       setActiveTab('chat');
+      // Auto-start a new chat if none exists
+      if (!currentSessionId) startNewChat();
     } catch (error) {
       console.log(error);
       alert("System connection failed. Check your credential logs.");
@@ -42,7 +54,15 @@ function App() {
 
   return (
     <div className="flex h-screen w-full bg-[#0a0d14] text-slate-200 font-sans selection:bg-indigo-500/30">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isConnected={isConnected} onDisconnect={handleDisconnect} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        isConnected={isConnected} 
+        onDisconnect={handleDisconnect}
+        currentSessionId={currentSessionId}
+        onSessionSelect={loadSession}
+        onNewChat={startNewChat}
+      />
 
       <main className="flex-1 overflow-hidden relative flex flex-col p-4 md:p-8">
         {/* Background Decorative Elements */}

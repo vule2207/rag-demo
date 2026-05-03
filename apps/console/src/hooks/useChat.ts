@@ -19,10 +19,41 @@ export const useChat = () => {
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [isBotTyping, setIsBotTyping] = useState(false);
   const [chatInput, setChatInput] = useState('');
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  const startNewChat = async () => {
+    try {
+      const session = await ragService.createSession();
+      setCurrentSessionId(session.id);
+      setChatHistory([]);
+      return session.id;
+    } catch (error) {
+      console.error("Failed to create session", error);
+    }
+  };
+
+  const loadSession = async (sessionId: string) => {
+    try {
+      const data = await ragService.getSession(sessionId);
+      setCurrentSessionId(sessionId);
+      setChatHistory(data.messages.map((m: any) => ({
+        ...m,
+        timestamp: new Date(m.timestamp)
+      })));
+    } catch (error) {
+      console.error("Failed to load session", error);
+    }
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || isBotTyping) return;
+
+    let sessionId = currentSessionId;
+    if (!sessionId) {
+      sessionId = await startNewChat() || null;
+      if (!sessionId) return;
+    }
 
     const userMsg: Message = { role: 'user', content: chatInput, timestamp: new Date() };
     setChatHistory(prev => [...prev, userMsg]);
@@ -37,6 +68,12 @@ export const useChat = () => {
         timestamp: new Date(),
         steps: [] 
       }]);
+
+      // Prepare history to send (last 10 messages)
+      const historyToSend = chatHistory.slice(-10).map(m => ({
+        role: m.role,
+        content: m.content
+      }));
 
       await ragService.chatStream(chatInput, (event) => {
         setChatHistory(prev => {
@@ -75,7 +112,7 @@ export const useChat = () => {
           newHistory[newHistory.length - 1] = lastMsg;
           return newHistory;
         });
-      });
+      }, historyToSend, sessionId || undefined);
     } catch (error) {
       setChatHistory(prev => [...prev, { 
         role: 'assistant', 
@@ -92,6 +129,9 @@ export const useChat = () => {
     chatInput,
     setChatInput,
     isBotTyping,
-    handleSendMessage
+    currentSessionId,
+    handleSendMessage,
+    loadSession,
+    startNewChat
   };
 };

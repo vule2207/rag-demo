@@ -1,18 +1,18 @@
 export const ragService = {
-  async chat(message: string) {
+  async chat(message: string, history: any[] = [], sessionId?: string) {
     const response = await fetch('/api/rag/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, history, session_id: sessionId }),
     });
     if (!response.ok) throw new Error('RAG Chat failed');
     return response.json();
   },
-  async chatStream(message: string, onEvent: (event: any) => void) {
+  async chatStream(message: string, onEvent: (event: any) => void, history: any[] = [], sessionId?: string) {
     const response = await fetch('/api/rag/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, history, session_id: sessionId }),
     });
 
     if (!response.ok) throw new Error('RAG Chat stream failed');
@@ -72,6 +72,30 @@ export const ragService = {
       method: 'DELETE',
     });
     if (!response.ok) throw new Error('Delete failed');
+    return response.json();
+  },
+  
+  async listSessions() {
+    const response = await fetch('/api/rag/sessions');
+    if (!response.ok) throw new Error('Failed to list sessions');
+    return response.json();
+  },
+
+  async createSession() {
+    const response = await fetch('/api/rag/sessions', { method: 'POST' });
+    if (!response.ok) throw new Error('Failed to create session');
+    return response.json();
+  },
+
+  async getSession(id: string) {
+    const response = await fetch(`/api/rag/sessions/${id}`);
+    if (!response.ok) throw new Error('Failed to get session');
+    return response.json();
+  },
+
+  async deleteSession(id: string) {
+    const response = await fetch(`/api/rag/sessions/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Failed to delete session');
     return response.json();
   }
 };

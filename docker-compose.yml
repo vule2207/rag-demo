@@ -34,6 +34,7 @@ services:
       - ./services/rag-engine:/app
       - ./services/rag-engine/papers:/app/papers
       - ./services/rag-engine/faiss_index:/app/faiss_index
+      - ./services/rag-engine/storage:/app/storage
     depends_on:
       - mcp-bridge
     networks:

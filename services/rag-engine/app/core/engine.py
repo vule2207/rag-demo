@@ -191,6 +191,6 @@ class RagEngine:
             verbose=True,
             handle_parsing_errors=handle_parsing_error,
             return_intermediate_steps=True,
-            max_iterations=5,
+            max_iterations=15,
             max_execution_time=300 # Prevent long-running loops
         )
