@@ -16,10 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python packages without cache
+# Install Python packages with cache mount
 COPY requirements.txt .
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir --prefix=/install -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install --prefix=/install -r requirements.txt
 
 # ---------- Runtime stage ----------
 FROM python:3.11-slim

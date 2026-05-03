@@ -1,4 +1,7 @@
 import os
+# Force allow pulling public prompts via environment variable (MUST be set before hub import)
+os.environ["LANGCHAIN_HUB_DANGEROUSLY_PULL_PUBLIC_PROMPT"] = "true"
+
 from typing import List, Optional, Any
 from langchain_community.document_loaders import DirectoryLoader, UnstructuredFileLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -38,17 +41,33 @@ class DocumentProcessor:
 
 class RagEngine:
     def __init__(self, model_name: str = "models/gemma-4-31b-it", embed_model: str = "models/gemini-embedding-001"):
-        # Check if Google API Key is available
+        # 1. Get configuration from environment
+        provider = os.getenv("MODEL_PROVIDER", "google").lower()
         google_api_key = os.getenv("GOOGLE_API_KEY")
         
-        if google_api_key:
-            # Use Google Cloud models
+        # 2. Initialize Models based on provider
+        if provider == "google" and google_api_key:
+            import logging
+            logging.getLogger(__name__).info("Using Google Generative AI provider")
             self.llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=google_api_key, temperature=0)
             self.embeddings = GoogleGenerativeAIEmbeddings(model=embed_model, google_api_key=google_api_key)
         else:
-            # Fallback to local Ollama models (if no API key)
-            self.llm = ChatOllama(model="gemma4:31b", temperature=0)
-            self.embeddings = OllamaEmbeddings(model="nomic-embed-text")
+            import logging
+            ollama_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+            ollama_model = os.getenv("OLLAMA_MODEL", "gemma2:9b")
+            ollama_embed = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+            
+            logging.getLogger(__name__).info(f"Using Ollama provider at {ollama_url}")
+            
+            self.llm = ChatOllama(
+                model=ollama_model, 
+                base_url=ollama_url,
+                temperature=0
+            )
+            self.embeddings = OllamaEmbeddings(
+                model=ollama_embed,
+                base_url=ollama_url
+            )
         
         self.vector_store = None
 
@@ -90,27 +109,57 @@ class RagEngine:
         return self.vector_store
 
     def build_agent(self, tools: List):
-        # Structured Chat Agent uses a different prompt format that works better with Gemma
-        # We customize it to be even stricter about the JSON-only requirement
-        base_prompt = hub.pull("hwchase17/structured-chat-agent")
+        # 1. Define the Structured Chat Prompt manually to avoid Hub security issues
+        from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
         
-        # Add a strict formatting instruction to the end of the system message
-        custom_instruction = (
-            "\n\nCRITICAL: Your response MUST end immediately after the closing ``` of the JSON blob. "
-            "Do not add any text, thoughts, or analysis after the JSON blob. One action per response."
+        system_template = (
+            "Respond to the human as helpfully and accurately as possible.\n\n"
+            "## CONVERSATION RULES:\n"
+            "1. For greetings (hi, hello, etc.), basic conversation, or if you already know the answer, respond DIRECTLY using the 'Final Answer' action.\n"
+            "2. ONLY use tools if you need to look up specific information from the knowledge base, database, or internet.\n"
+            "3. If the user's request is ambiguous, ask for clarification directly.\n\n"
+            "## TOOL ACCESS:\n"
+            "You have access to the following tools:\n{tools}\n\n"
+            "To use a tool, you MUST respond with a JSON blob specifying the action and action_input.\n"
+            "Valid \"action\" values: \"Final Answer\" or {tool_names}\n\n"
+            "## FORMATTING:\n"
+            "Provide only ONE action per $JSON_BLOB, as shown:\n\n"
+            "```\n"
+            "{{\n"
+            "  \"action\": \"$TOOL_NAME\",\n"
+            "  \"action_input\": \"$INPUT\"\n"
+            "}}\n"
+            "```\n\n"
+            "Follow this format strictly:\n\n"
+            "Question: input question to answer\n"
+            "Thought: consider if you need a tool or can answer directly\n"
+            "Action:\n"
+            "```\n"
+            "$JSON_BLOB\n"
+            "```\n"
+            "Observation: action result\n"
+            "... (repeat Thought/Action/Observation if needed)\n"
+            "Thought: I have the final answer\n"
+            "Action:\n"
+            "```\n"
+            "{{\n"
+            "  \"action\": \"Final Answer\",\n"
+            "  \"action_input\": \"Your final response here\"\n"
+            "}}\n"
+            "```\n\n"
+            "CRITICAL: Your response MUST end immediately after the closing ``` of the JSON blob. "
+            "Do not add any text after the JSON blob."
         )
         
-        if hasattr(base_prompt, 'messages'):
-            if len(base_prompt.messages) > 0:
-                base_prompt.messages[0].prompt.template += custom_instruction
-            
-            # Insert chat_history placeholder between system and human message
-            if len(base_prompt.messages) >= 2:
-                base_prompt.messages.insert(1, MessagesPlaceholder(variable_name="chat_history"))
-            else:
-                # Fallback if prompt structure is different - append it
-                base_prompt.messages.append(MessagesPlaceholder(variable_name="chat_history"))
-
+        human_template = "{input}\n\n{agent_scratchpad}"
+        
+        base_prompt = ChatPromptTemplate.from_messages([
+            SystemMessagePromptTemplate.from_template(system_template),
+            MessagesPlaceholder(variable_name="chat_history"),
+            HumanMessagePromptTemplate.from_template(human_template),
+        ])
+        
+        # 2. Build the agent with the hardcoded prompt
         agent = create_structured_chat_agent(self.llm, tools, base_prompt)
         
         def handle_parsing_error(error: Any) -> str:

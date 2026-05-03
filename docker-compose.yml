@@ -2,6 +2,7 @@ version: '3.8'
 services:
   # --- Frontend Application ---
   console:
+    container_name: console
     build:
       context: ./apps/console
       dockerfile: Dockerfile
@@ -17,28 +18,41 @@ services:
 
   # --- Agentic RAG Engine ---
   rag-engine:
+    container_name: rag-engine
     build:
       context: ./services/rag-engine
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
     env_file:
-      - ./.env
+      - .env
     environment:
       - MCP_URL=http://mcp-bridge:3000/api/mcp/execute
+      - LANGCHAIN_HUB_DANGEROUSLY_PULL_PUBLIC_PROMPT=true
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
+      - ./services/rag-engine:/app
       - ./services/rag-engine/papers:/app/papers
       - ./services/rag-engine/faiss_index:/app/faiss_index
+    depends_on:
+      - mcp-bridge
     networks:
       - app-net
 
   # --- MCP Connection Bridge ---
   mcp-bridge:
+    container_name: mcp-bridge
     build:
       context: ./services/mcp-bridge
       dockerfile: Dockerfile
+      target: server-builder
     ports:
       - "3000:3000"
+    command: >
+      sh -c "npm install && npm run start:dev"
+    volumes:
+      - ./services/mcp-bridge:/app
+      - /app/node_modules
     networks:
       - app-net
 
